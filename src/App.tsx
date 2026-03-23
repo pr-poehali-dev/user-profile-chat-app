@@ -912,7 +912,16 @@ export default function App() {
   const [me, setMe] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    const saved = localStorage.getItem("sidebarOpen");
+    return saved === null ? true : saved === "true";
+  });
+
+  const toggleSidebar = () => setSidebarOpen(o => {
+    const next = !o;
+    localStorage.setItem("sidebarOpen", String(next));
+    return next;
+  });
 
   useEffect(() => {
     const saved = localStorage.getItem("nexus_token");
@@ -1024,7 +1033,7 @@ export default function App() {
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="px-6 py-4 border-b border-border bg-background/80 backdrop-blur-sm flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <button onClick={() => setSidebarOpen(o => !o)} className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-muted">
+            <button onClick={toggleSidebar} className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-muted">
               <Icon name={sidebarOpen ? "PanelLeftClose" : "PanelLeftOpen"} size={18} />
             </button>
             <div>
