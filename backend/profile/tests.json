@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Get profile without token",
+      "method": "GET",
+      "path": "/?action=get",
+      "expectedStatus": 401,
+      "bodyMatcher": "partial"
+    }
+  ]
+}

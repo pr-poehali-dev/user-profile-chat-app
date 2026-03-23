@@ -2,9 +2,22 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 
 const AUTH_URL = "https://functions.poehali.dev/b810d65e-d7e1-458a-82e5-3e2ee7febcdc";
+const PROFILE_URL = "https://functions.poehali.dev/d2b89cf3-65e5-49b8-9a63-3b03059cddb0";
 
 async function apiAuth(action: string, body?: object, token?: string) {
   const res = await fetch(`${AUTH_URL}?action=${action}`, {
+    method: body ? "POST" : "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
+
+async function apiProfile(action: string, body?: object, token?: string) {
+  const res = await fetch(`${PROFILE_URL}?action=${action}`, {
     method: body ? "POST" : "GET",
     headers: {
       "Content-Type": "application/json",
@@ -721,13 +734,53 @@ function CommunitiesPage() {
   );
 }
 
-function SettingsPage({ user, setUser }: { user: User; setUser: (u: User) => void }) {
+function SettingsPage({ user, token, setUser }: { user: User; token: string | null; setUser: (u: User) => void }) {
   const [status, setStatus] = useState<OnlineStatus>(user.status);
   const [customStatus, setCustomStatus] = useState(user.customStatus);
   const [name, setName] = useState(user.name);
   const [bio, setBio] = useState(user.bio);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [error, setError] = useState("");
 
-  const save = () => setUser({ ...user, status, customStatus, name, bio });
+  const save = async () => {
+    if (!name.trim()) { setError("Имя не может быть пустым"); return; }
+    setError("");
+    setSaving(true);
+    try {
+      const body: Record<string, string> = {
+        name: name.trim(),
+        bio: bio.trim(),
+        custom_status: customStatus.trim(),
+        online_status: status,
+      };
+      if (newPassword) {
+        body.new_password = newPassword;
+        body.current_password = currentPassword;
+      }
+      const data = await apiProfile("update", body, token || undefined);
+      if (data.error) { setError(data.error); return; }
+      const u = data.user;
+      setUser({
+        ...user,
+        name: u.name,
+        bio: u.bio || "",
+        customStatus: u.custom_status || "",
+        status: (u.online_status as OnlineStatus) || "online",
+        avatar: u.avatar_initials || u.name.slice(0, 2).toUpperCase(),
+      });
+      setCurrentPassword("");
+      setNewPassword("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch {
+      setError("Ошибка сохранения. Попробуй ещё раз.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="max-w-xl mx-auto animate-fade-in space-y-4">
@@ -736,13 +789,25 @@ function SettingsPage({ user, setUser }: { user: User; setUser: (u: User) => voi
           <Icon name="User" size={18} className="text-primary" />Профиль
         </h3>
         <div className="space-y-3">
+          <div className="flex items-center gap-4 mb-2">
+            <div className={`w-16 h-16 rounded-full bg-gradient-to-br ${["from-violet-500 to-indigo-600","from-pink-500 to-rose-600","from-cyan-500 to-blue-600"][user.name.charCodeAt(0) % 3]} flex items-center justify-center text-white font-bold text-lg`}>
+              {user.avatar}
+            </div>
+            <div>
+              <p className="text-sm font-medium text-foreground">{user.name}</p>
+              <p className="text-xs text-muted-foreground">@{user.username}</p>
+            </div>
+          </div>
           <div>
-            <label className="text-xs text-muted-foreground block mb-1.5">Имя</label>
-            <input value={name} onChange={e => setName(e.target.value)} className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground" />
+            <label className="text-xs text-muted-foreground block mb-1.5">Отображаемое имя</label>
+            <input value={name} onChange={e => setName(e.target.value)}
+              className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground block mb-1.5">О себе</label>
-            <textarea value={bio} onChange={e => setBio(e.target.value)} className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground resize-none" rows={3} />
+            <textarea value={bio} onChange={e => setBio(e.target.value)}
+              placeholder="Расскажи немного о себе..."
+              className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground resize-none placeholder:text-muted-foreground" rows={3} />
           </div>
         </div>
       </div>
@@ -776,6 +841,26 @@ function SettingsPage({ user, setUser }: { user: User; setUser: (u: User) => voi
 
       <div className="bg-card border border-border rounded-2xl p-5">
         <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
+          <Icon name="Lock" size={18} className="text-primary" />Смена пароля
+        </h3>
+        <div className="space-y-3">
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Текущий пароль</label>
+            <input value={currentPassword} onChange={e => setCurrentPassword(e.target.value)}
+              type="password" placeholder="••••••••"
+              className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground block mb-1.5">Новый пароль</label>
+            <input value={newPassword} onChange={e => setNewPassword(e.target.value)}
+              type="password" placeholder="Минимум 6 символов"
+              className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-card border border-border rounded-2xl p-5">
+        <h3 className="font-semibold text-foreground mb-4 flex items-center gap-2">
           <Icon name="Bell" size={18} className="text-primary" />Уведомления
         </h3>
         <div className="space-y-3">
@@ -790,8 +875,22 @@ function SettingsPage({ user, setUser }: { user: User; setUser: (u: User) => voi
         </div>
       </div>
 
-      <button onClick={save} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl transition-all hover:scale-[1.01]">
-        Сохранить изменения
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-xl">
+          {error}
+        </div>
+      )}
+
+      {saved && (
+        <div className="bg-green-500/10 border border-green-500/20 text-green-400 text-sm px-4 py-3 rounded-xl flex items-center gap-2 animate-fade-in">
+          <Icon name="CheckCircle" size={16} /> Изменения сохранены
+        </div>
+      )}
+
+      <button onClick={save} disabled={saving}
+        className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl transition-all hover:scale-[1.01] disabled:opacity-60 flex items-center justify-center gap-2">
+        {saving && <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />}
+        {saving ? "Сохраняю..." : "Сохранить изменения"}
       </button>
     </div>
   );
@@ -950,7 +1049,7 @@ export default function App() {
           {page === "notifications" && <NotificationsPage />}
           {page === "search" && <SearchPage />}
           {page === "communities" && <CommunitiesPage />}
-          {page === "settings" && <SettingsPage user={me!} setUser={(u) => setMe(u)} />}
+          {page === "settings" && <SettingsPage user={me!} token={token} setUser={(u) => setMe(u)} />}
         </div>
       </main>
     </div>
