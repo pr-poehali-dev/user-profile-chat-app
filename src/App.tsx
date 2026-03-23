@@ -1,5 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+
+const AUTH_URL = "https://functions.poehali.dev/b810d65e-d7e1-458a-82e5-3e2ee7febcdc";
+
+async function apiAuth(action: string, body?: object, token?: string) {
+  const res = await fetch(`${AUTH_URL}?action=${action}`, {
+    method: body ? "POST" : "GET",
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  return res.json();
+}
 
 type Page = "feed" | "profile" | "chats" | "friends" | "notifications" | "search" | "settings" | "communities";
 type OnlineStatus = "online" | "away" | "busy" | "offline";
@@ -93,6 +107,124 @@ const MOCK_CHATS: Chat[] = [
     { id: 1, text: "Надо обсудить партнёрство", fromMe: false, time: "вчера" },
   ]},
 ];
+
+function AuthScreen({ onAuth }: { onAuth: (user: User, token: string) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [form, setForm] = useState({ login: "", username: "", email: "", password: "", name: "" });
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      let data;
+      if (mode === "login") {
+        data = await apiAuth("login", { login: form.login, password: form.password });
+      } else {
+        data = await apiAuth("register", { username: form.username, email: form.email, password: form.password, name: form.name });
+      }
+      if (data.error) { setError(data.error); return; }
+      const u = data.user;
+      const mapped: User = {
+        id: u.id, name: u.name, username: u.username,
+        avatar: u.avatar_initials || u.name.slice(0,2).toUpperCase(),
+        status: (u.online_status as OnlineStatus) || "online",
+        customStatus: u.custom_status || "",
+        bio: u.bio || "",
+        followers: u.followers_count || 0,
+        following: u.following_count || 0,
+        posts: u.posts_count || 0,
+      };
+      onAuth(mapped, data.token);
+    } catch {
+      setError("Ошибка соединения. Попробуй ещё раз.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center p-4">
+      <div className="w-full max-w-sm animate-fade-in">
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-indigo-500/30">
+            <span className="text-white font-black text-2xl">Н</span>
+          </div>
+          <h1 className="text-2xl font-black text-foreground">Нексус</h1>
+          <p className="text-muted-foreground text-sm mt-1">Социальная сеть нового поколения</p>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-6">
+          <div className="flex bg-muted rounded-xl p-1 mb-6">
+            {(["login", "register"] as const).map(m => (
+              <button key={m} onClick={() => { setMode(m); setError(""); }}
+                className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${mode === m ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}>
+                {m === "login" ? "Войти" : "Регистрация"}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            {mode === "register" && (
+              <>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">Имя</label>
+                  <input value={form.name} onChange={e => set("name", e.target.value)}
+                    placeholder="Иван Иванов"
+                    className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">Логин</label>
+                  <input value={form.username} onChange={e => set("username", e.target.value)}
+                    placeholder="ivan_ivanov"
+                    className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+                </div>
+                <div>
+                  <label className="text-xs text-muted-foreground block mb-1.5">Email</label>
+                  <input value={form.email} onChange={e => set("email", e.target.value)}
+                    placeholder="ivan@example.com" type="email"
+                    className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+                </div>
+              </>
+            )}
+            {mode === "login" && (
+              <div>
+                <label className="text-xs text-muted-foreground block mb-1.5">Логин или Email</label>
+                <input value={form.login} onChange={e => set("login", e.target.value)}
+                  placeholder="ivan_ivanov"
+                  className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-muted-foreground block mb-1.5">Пароль</label>
+              <input value={form.password} onChange={e => set("password", e.target.value)}
+                placeholder="••••••••" type="password"
+                onKeyDown={e => e.key === "Enter" && submit()}
+                className="w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-primary/50 text-foreground placeholder:text-muted-foreground" />
+            </div>
+          </div>
+
+          {error && (
+            <div className="mt-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-2.5 rounded-xl">
+              {error}
+            </div>
+          )}
+
+          <button onClick={submit} disabled={loading}
+            className="w-full mt-5 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold py-3 rounded-xl transition-all hover:scale-[1.01] disabled:opacity-60 flex items-center justify-center gap-2">
+            {loading ? (
+              <span className="w-4 h-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+            ) : null}
+            {mode === "login" ? "Войти" : "Создать аккаунт"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const AVATAR_COLORS = [
   "from-violet-500 to-indigo-600",
@@ -678,7 +810,53 @@ const NAV_ITEMS: { id: Page; label: string; icon: string }[] = [
 
 export default function App() {
   const [page, setPage] = useState<Page>("feed");
-  const [me, setMe] = useState(ME);
+  const [me, setMe] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("nexus_token");
+    if (!saved) { setAuthLoading(false); return; }
+    apiAuth("me", undefined, saved).then(data => {
+      if (data.user) {
+        const u = data.user;
+        setMe({
+          id: u.id, name: u.name, username: u.username,
+          avatar: u.avatar_initials || u.name.slice(0, 2).toUpperCase(),
+          status: (u.online_status as OnlineStatus) || "online",
+          customStatus: u.custom_status || "",
+          bio: u.bio || "",
+          followers: u.followers_count || 0,
+          following: u.following_count || 0,
+          posts: u.posts_count || 0,
+        });
+        setToken(saved);
+      }
+    }).finally(() => setAuthLoading(false));
+  }, []);
+
+  const handleAuth = (user: User, t: string) => {
+    localStorage.setItem("nexus_token", t);
+    setToken(t);
+    setMe(user);
+  };
+
+  const handleLogout = async () => {
+    if (token) await apiAuth("logout", {}, token);
+    localStorage.removeItem("nexus_token");
+    setToken(null);
+    setMe(null);
+  };
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!me) return <AuthScreen onAuth={handleAuth} />;
 
   const unreadChats = MOCK_CHATS.reduce((s, c) => s + c.unread, 0);
   const unreadNotifs = 2;
@@ -723,20 +901,21 @@ export default function App() {
           onClick={() => setPage("profile")}
         >
           <div className="flex items-center gap-3 px-2 py-1">
-            <Avatar user={me} size="sm" showStatus />
+            <Avatar user={me!} size="sm" showStatus />
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold text-foreground truncate">{me.name}</div>
-              {me.customStatus ? (
-                <div className="text-xs text-muted-foreground truncate">{me.customStatus}</div>
+              <div className="text-sm font-semibold text-foreground truncate">{me!.name}</div>
+              {me!.customStatus ? (
+                <div className="text-xs text-muted-foreground truncate">{me!.customStatus}</div>
               ) : (
-                <StatusBadge status={me.status} />
+                <StatusBadge status={me!.status} />
               )}
             </div>
             <button
-              onClick={e => { e.stopPropagation(); setPage("settings"); }}
-              className="text-muted-foreground hover:text-foreground transition-colors p-1 rounded-lg hover:bg-muted"
+              onClick={e => { e.stopPropagation(); handleLogout(); }}
+              title="Выйти"
+              className="text-muted-foreground hover:text-red-400 transition-colors p-1 rounded-lg hover:bg-muted"
             >
-              <Icon name="Settings" size={15} />
+              <Icon name="LogOut" size={15} />
             </button>
           </div>
         </div>
@@ -765,13 +944,13 @@ export default function App() {
 
         <div className="flex-1 overflow-y-auto p-6">
           {page === "feed" && <FeedPage />}
-          {page === "profile" && <ProfilePage user={me} isMe />}
+          {page === "profile" && <ProfilePage user={me!} isMe />}
           {page === "chats" && <ChatsPage />}
           {page === "friends" && <FriendsPage />}
           {page === "notifications" && <NotificationsPage />}
           {page === "search" && <SearchPage />}
           {page === "communities" && <CommunitiesPage />}
-          {page === "settings" && <SettingsPage user={me} setUser={setMe} />}
+          {page === "settings" && <SettingsPage user={me!} setUser={(u) => setMe(u)} />}
         </div>
       </main>
     </div>
