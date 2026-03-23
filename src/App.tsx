@@ -912,6 +912,7 @@ export default function App() {
   const [me, setMe] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   useEffect(() => {
     const saved = localStorage.getItem("nexus_token");
@@ -962,7 +963,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
-      <aside className="w-64 shrink-0 bg-[hsl(225,18%,8%)] border-r border-border flex flex-col">
+      <aside className={`${sidebarOpen ? "w-64" : "w-0"} shrink-0 bg-[hsl(225,18%,8%)] border-r border-border flex flex-col transition-all duration-300 overflow-hidden`}>
         <div className="p-5 border-b border-border">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/30">
@@ -1022,13 +1023,18 @@ export default function App() {
 
       <main className="flex-1 flex flex-col overflow-hidden">
         <header className="px-6 py-4 border-b border-border bg-background/80 backdrop-blur-sm flex items-center justify-between shrink-0">
-          <div>
-            <h1 className="font-bold text-foreground text-lg">
-              {NAV_ITEMS.find(n => n.id === page)?.label}
-            </h1>
-            <p className="text-xs text-muted-foreground">
-              {new Date().toLocaleDateString("ru", { weekday: "long", day: "numeric", month: "long" })}
-            </p>
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(o => !o)} className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-muted">
+              <Icon name={sidebarOpen ? "PanelLeftClose" : "PanelLeftOpen"} size={18} />
+            </button>
+            <div>
+              <h1 className="font-bold text-foreground text-lg">
+                {NAV_ITEMS.find(n => n.id === page)?.label}
+              </h1>
+              <p className="text-xs text-muted-foreground">
+                {new Date().toLocaleDateString("ru", { weekday: "long", day: "numeric", month: "long" })}
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <button onClick={() => setPage("search")} className="text-muted-foreground hover:text-foreground transition-colors p-2 rounded-lg hover:bg-muted">
